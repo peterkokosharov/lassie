@@ -370,3 +370,35 @@ def test_close_all_stops_sessions_in_parallel(srv, monkeypatch):
     srv.close_all()
     assert time.monotonic() - t0 < 2.0
     assert not srv.sessions
+
+
+def test_models_fetch_does_not_follow_redirects(srv):
+    import http.server
+    hits = []
+
+    class H(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            hits.append(self.path)
+            if self.path.startswith("/v1/models"):
+                self.send_response(302)
+                self.send_header("Location", "/elsewhere")
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+            else:
+                self.send_response(200)
+                self.send_header("Content-Length", "2")
+                self.end_headers()
+                self.wfile.write(b"{}")
+
+        def log_message(self, *a):
+            pass
+    gw = http.server.ThreadingHTTPServer(("127.0.0.1", 0), H)
+    threading.Thread(target=gw.serve_forever, daemon=True).start()
+    try:
+        status, _, data = request(srv, "GET", "/api/models?endpoint=http://127.0.0.1:%d" % gw.server_address[1],
+                                  headers={"X-Lassie-Token": TOKEN})
+    finally:
+        gw.shutdown()
+        gw.server_close()
+    assert status == 200 and data["models"] == [] and "error" in data
+    assert hits == ["/v1/models"]

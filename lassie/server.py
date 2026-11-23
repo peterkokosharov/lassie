@@ -70,6 +70,16 @@ def _eq(a, b):
     return isinstance(a, str) and isinstance(b, str) and hmac.compare_digest(a.encode(), b.encode())
 
 
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """A gateway that answers with a redirect is an error: the API key must not be sent anywhere else."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+_OPENER = urllib.request.build_opener(_NoRedirect)
+
+
 class Session:
     """One page = one rex process plus the list of events the page has not necessarily seen yet."""
 
@@ -461,7 +471,7 @@ class Handler(BaseHTTPRequestHandler):
         if key:
             req.add_header("Authorization", "Bearer " + key)
         try:
-            with urllib.request.urlopen(req, timeout=MODELS_TIMEOUT) as r:
+            with _OPENER.open(req, timeout=MODELS_TIMEOUT) as r:
                 data = json.loads(r.read(MODELS_MAX + 1)[:MODELS_MAX])
         except (urllib.error.URLError, OSError, ValueError) as exc:
             return self._reply(200, {"models": [], "error": "models not available: %s" % type(exc).__name__})
