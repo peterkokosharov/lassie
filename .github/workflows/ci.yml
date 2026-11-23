@@ -4,6 +4,7 @@ on:
   push:
   pull_request:
 
+# TODO: pin the actions below to full commit SHAs (tag kept as a comment); the SHAs could not be looked up offline.
 permissions:
   contents: read
 
@@ -15,6 +16,7 @@ jobs:
         os: [ubuntu-24.04, windows-2022, macos-15]
         python: ["3.12", "3.14"]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4.2.2
       - uses: actions/setup-python@v5.6.0
