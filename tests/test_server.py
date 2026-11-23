@@ -322,3 +322,41 @@ def test_non_string_ids_are_harmless(srv, tmp_path):
 
 def test_handler_has_a_read_timeout():
     assert server_mod.Handler.timeout == 60
+
+
+# --- gate details ------------------------------------------------------------------------------------------------
+def raw_request(s, text):
+    import socket
+    c = socket.create_connection(("127.0.0.1", s.port), timeout=10)
+    c.sendall(text.encode())
+    data = b""
+    try:
+        while b"\r\n\r\n" not in data:
+            chunk = c.recv(4096)
+            if not chunk:
+                break
+            data += chunk
+    finally:
+        c.close()
+    return int(data.split(b" ")[1])
+
+
+def test_events_refused_without_auth(srv, tmp_path):
+    sid = start(srv, tmp_path)
+    assert request(srv, "GET", "/api/events?sid=" + sid)[0] == 403
+    assert request(srv, "GET", "/api/events?sid=" + sid, headers={"Cookie": "lassie_%d=nope" % srv.port})[0] == 403
+
+
+def test_origin_null_refused(srv):
+    assert request(srv, "GET", "/api/state", headers={"X-Lassie-Token": TOKEN, "Origin": "null"})[0] == 403
+    assert request(srv, "POST", "/api/start", {}, {"X-Lassie-Token": TOKEN, "Origin": "null"})[0] == 403
+
+
+def test_transfer_encoding_and_oversize_body_refused(srv):
+    host = "Host: 127.0.0.1:%d\r\n" % srv.port
+    assert raw_request(srv, "POST /api/start HTTP/1.1\r\n" + host + "X-Lassie-Token: %s\r\n"
+                       "Transfer-Encoding: chunked\r\n\r\n0\r\n\r\n" % TOKEN) == 411
+    assert raw_request(srv, "POST /api/start HTTP/1.1\r\n" + host + "X-Lassie-Token: %s\r\n"
+                       "Content-Length: %d\r\n\r\n" % (TOKEN, server_mod.MAX_BODY + 1)) == 413
+    assert raw_request(srv, "POST /api/start HTTP/1.1\r\n" + host + "X-Lassie-Token: %s\r\n"
+                       "Content-Length: -5\r\n\r\n" % TOKEN) == 413
