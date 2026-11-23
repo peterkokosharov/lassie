@@ -3,6 +3,8 @@
  "endpoint": "Endpoint",
  "model": "Model",
  "models": "Models",
+ "modelOther": "other...",
+ "modelCustomPlaceholder": "model id",
  "workspace": "Workspace",
  "start": "Start",
  "restart": "Restart",
@@ -41,6 +43,6 @@
  "starting": "starting rex in {workspace} with {model}",
  "failed": "failed: {message}",
  "busy": "busy: wait for the current request to finish",
- "modelsFound": "{n} models found (pick one in the Model field)",
+ "modelsFound": "{n} models found (pick one in the Model list)",
  "modelsNone": "no models found"
 }

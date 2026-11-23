@@ -284,7 +284,7 @@ function openStream() {
 
 // ---- actions ---------------------------------------------------------------------------------------------
 async function start() {
-  const body = { sid, endpoint: $("endpoint").value.trim(), model: $("model").value.trim(), workspace: $("workspace").value.trim() };
+  const body = { sid, endpoint: $("endpoint").value.trim(), model: getModel(), workspace: $("workspace").value.trim() };
   running = false; starting = true; setStatus();
   const r = await post("start", body);
   if (r.data && r.data.sid) { sid = r.data.sid; openStream(); }
@@ -315,8 +315,8 @@ async function send() {
   if (!text.trim() || busy) return;
   $("input").value = "";
   if (!running) {
-    waitingText = text;
-    if (!sid || !es || !startedWith) { if (!(await start())) $("input").value = text; }
+    waitingText = text;   // rex is not up: start it with the current fields, the text goes out on "ready"
+    if (!starting && !(await start())) $("input").value = text;
     return;
   }
   sendText(text);
@@ -325,12 +325,28 @@ async function send() {
 async function stop() { if (sid) await post("stop", { sid }); }
 async function reset() { if (sid && running && !busy) await post("reset", { sid }); }
 
+// The Model field: a <select> of the known models plus "other..." (value "") that shows a text input.
+function getModel() { const v = $("model").value; return (v === "" ? $("modelcustom").value : v).trim(); }
+
+function fillModels(models, keep) {
+  const sel = $("model"), other = sel.querySelector('option[value=""]');
+  const list = [...new Set([...(models || []), ...(keep ? [keep] : [])])];
+  for (const o of [...sel.options]) if (o !== other) o.remove();
+  for (const m of list) { const o = el("option", null, m); o.value = m; sel.insertBefore(o, other); }
+  sel.value = keep || (list.length ? list[0] : "");
+  showCustom();
+}
+
+function showCustom() {
+  const custom = $("model").value === "";
+  $("modelcustom").hidden = !custom;
+  if (custom) $("modelcustom").focus();
+}
+
 async function loadModels() {
   const ep = $("endpoint").value.trim();
   const data = await get("models?endpoint=" + encodeURIComponent(ep));
-  const list = $("models");
-  list.replaceChildren();
-  for (const m of data.models || []) { const o = el("option"); o.value = m; list.appendChild(o); }
+  fillModels(data.models || [], getModel());
   sys(data.error ? t("failed", { message: data.error }) : (data.models || []).length ? t("modelsFound", { n: data.models.length }) : t("modelsNone"),
     data.error ? "err" : "");
 }
@@ -339,7 +355,7 @@ async function loadModels() {
 function keys(e) {
   if (!e.altKey || e.ctrlKey || e.metaKey) return;
   const k = e.key.toLowerCase();
-  const act = { s: send, t: stop, r: reset, e: () => $("endpoint").focus(), m: () => $("model").focus(), w: () => $("workspace").focus() }[k];
+  const act = { s: send, t: stop, r: reset, e: () => $("endpoint").focus(), m: () => ($("model").value === "" ? $("modelcustom") : $("model")).focus(), w: () => $("workspace").focus() }[k];
   if (act && !$("perm").open) { e.preventDefault(); act(); }
 }
 
@@ -347,7 +363,7 @@ async function init() {
   let state = {};
   try { state = await get("state"); } catch (e) { /* server gone */ }
   $("endpoint").value = state.endpoint || "";
-  $("model").value = state.model || "";
+  fillModels([], state.model || "");
   $("workspace").value = state.workspace || "";
   await loadLang(pickLang(state.language));
   $("send").addEventListener("click", send);
@@ -362,10 +378,9 @@ async function init() {
   $("perm-deny").addEventListener("click", () => answerPerm("deny"));
   $("perm").addEventListener("cancel", (e) => { e.preventDefault(); answerPerm("deny"); });   // Esc = Deny
   $("lang").addEventListener("change", () => { localStorage.setItem("lassie.lang", $("lang").value); loadLang($("lang").value); });
-  $("model").addEventListener("change", () => {
-    const m = $("model").value.trim();
-    if (sid && running && m) post("model", { sid, model: m });
-  });
+  const modelChanged = () => { const m = getModel(); if (sid && running && m) post("model", { sid, model: m }); };   // rex switches live
+  $("model").addEventListener("change", () => { showCustom(); if ($("model").value !== "") modelChanged(); });
+  $("modelcustom").addEventListener("change", modelChanged);
   for (const id of ["endpoint", "workspace"]) $(id).addEventListener("input", setStatus);
   $("input").addEventListener("keydown", (e) => { if (e.key === "Enter" && e.ctrlKey) { e.preventDefault(); send(); } });
   document.addEventListener("keydown", keys);

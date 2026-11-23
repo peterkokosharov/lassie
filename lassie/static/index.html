@@ -15,8 +15,8 @@
   <img class="logo" src="/static/lassie.svg" alt="" width="28" height="28">
   <strong>Lassie</strong>
   <label><span data-s="endpoint">Endpoint</span> <input id="endpoint" type="url" size="24" spellcheck="false"></label>
-  <label><span data-s="model">Model</span> <input id="model" list="models" size="16" spellcheck="false"></label>
-  <datalist id="models"></datalist>
+  <label><span data-s="model">Model</span> <select id="model"><option value="" data-s="modelOther">other...</option></select></label>
+  <input id="modelcustom" size="16" spellcheck="false" hidden aria-label="Model" data-sp="modelCustomPlaceholder" placeholder="model id">
   <button id="getmodels" type="button" data-s="models">Models</button>
   <label class="wide"><span data-s="workspace">Workspace</span> <input id="workspace" size="30" spellcheck="false"></label>
   <button id="start" type="button" data-s="start">Start</button>
