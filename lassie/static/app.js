@@ -6,6 +6,7 @@
 
 import { renderMarkdown, codeBlock, setImageHook } from "./markdown.js";
 
+history.replaceState(null, "", "/");   // the start link carried the token: do not leave it in the address bar
 const TOKEN = document.querySelector('meta[name="lassie-token"]').content;
 const $ = (id) => document.getElementById(id);
 const LANGS = ["en", "bg", "de", "fr", "ru", "zh"];

@@ -68,23 +68,26 @@ def test_host_header_checked(srv):
 def test_page_needs_token_then_cookie(srv):
     assert request(srv, "GET", "/")[0] == 403
     assert request(srv, "GET", "/?t=wrong")[0] == 403
-    status, headers, _ = request(srv, "GET", "/?t=" + TOKEN)
-    assert status == 303 and headers["Location"] == "/"
-    cookie = headers["Set-Cookie"]
-    assert "HttpOnly" in cookie and "SameSite=Strict" in cookie
-    pair = cookie.split(";")[0]
-    status, headers, page = request(srv, "GET", "/", headers={"Cookie": pair})
+    status, headers, page = request(srv, "GET", "/?t=" + TOKEN)          # the page itself, no redirect
     assert status == 200
     assert TOKEN.encode() in page and b"__LASSIE_TOKEN__" not in page
     assert "script-src 'self'" in headers["Content-Security-Policy"]
+    cookie = headers["Set-Cookie"]
+    assert "HttpOnly" in cookie and "SameSite=Strict" in cookie
+    pair = cookie.split(";")[0]
+    assert TOKEN not in cookie and srv.cookie_secret in cookie            # the cookie is not the master token
+    status, _, body = request(srv, "GET", "/", headers={"Cookie": pair})  # a cookie alone does not show the page
+    assert status == 403 and b"start link again" in body and TOKEN.encode() not in body
     assert request(srv, "GET", "/", headers={"Cookie": "lassie_%d=nope" % srv.port})[0] == 403
 
 
 def test_api_needs_header_token(srv):
     assert request(srv, "GET", "/api/state")[0] == 403
     assert request(srv, "POST", "/api/start", {})[0] == 403
-    cookie = {"Cookie": "lassie_%d=%s" % (srv.port, TOKEN)}
+    cookie = {"Cookie": "lassie_%d=%s" % (srv.port, srv.cookie_secret)}
     assert request(srv, "POST", "/api/start", {}, cookie)[0] == 403       # a cookie alone never drives rex
+    assert request(srv, "GET", "/api/state", headers=cookie)[0] == 403
+    assert request(srv, "GET", "/api/events?sid=x", headers={"Cookie": "lassie_%d=%s" % (srv.port, TOKEN)})[0] == 403
     status, _, state = request(srv, "GET", "/api/state", headers={"X-Lassie-Token": TOKEN})
     assert status == 200 and state["model"] == "m1" and state["merman"] is True
 
@@ -149,7 +152,7 @@ def start(srv, tmp_path):
 
 def test_relay_chat_permission_model_reset(srv, tmp_path):
     sid = start(srv, tmp_path)
-    st = Stream(srv, sid, {"Cookie": "lassie_%d=%s" % (srv.port, TOKEN)})
+    st = Stream(srv, sid, {"Cookie": "lassie_%d=%s" % (srv.port, srv.cookie_secret)})
     try:
         assert st.wait(lambda e: e["type"] == "ready")["model"] == "m1"
         st.wait(lambda e: e["type"] == "log" and "fake rex starting" in e["text"])
@@ -202,7 +205,7 @@ def test_image_route_confined(srv, tmp_path):
     (tmp_path / "a.png").write_bytes(b"\x89PNGdata")
     (tmp_path.parent / "secret.png").write_bytes(b"\x89PNGsecret")
     sid = start(srv, tmp_path)
-    cookie = {"Cookie": "lassie_%d=%s" % (srv.port, TOKEN)}
+    cookie = {"Cookie": "lassie_%d=%s" % (srv.port, srv.cookie_secret)}
     status, headers, body = request(srv, "GET", "/api/image?sid=%s&path=a.png" % sid, headers=cookie)
     assert status == 200 and body == b"\x89PNGdata" and headers["Content-Type"] == "image/png"
     assert request(srv, "GET", "/api/image?sid=%s&path=../secret.png" % sid, headers=cookie)[0] == 404

@@ -95,10 +95,15 @@ untrusted repository as the workspace with it.
 ## Safety
 
 - Lassie listens on 127.0.0.1 only.
-- The start link carries a random token. Opening it sets an HttpOnly, SameSite=Strict cookie and redirects to `/`, so
-  the token leaves the address bar. The page gets the token in a meta tag and sends it in the `X-Lassie-Token` header
-  with every POST; another local page cannot set that header (the server never answers a CORS preflight). The event
-  stream and images (loaded by the browser itself) accept the cookie.
+- The start link carries a random token. Opening it shows the page directly (no redirect); the page script then
+  replaces the address with `/`, so the token leaves the address bar. The response also sets an HttpOnly,
+  SameSite=Strict cookie holding a separate random secret, not the token; the cookie only opens the event stream and
+  images (loaded by the browser itself) and never the page: a plain `/` with only the cookie says to open the start
+  link again. The page gets the token in a meta tag and sends it in the `X-Lassie-Token` header with every POST;
+  another local page cannot set that header (the server never answers a CORS preflight).
+- Note: SameSite does not separate 127.0.0.1 ports (same site, different origin), so another program on another
+  local port in the same browser could send the cookie; that is why it opens nothing but the two read-only GET routes.
+
 - The Host header must be exactly `127.0.0.1:<port>` or `localhost:<port>` (no DNS rebinding); an Origin header, when
   present, must be Lassie's own.
 - Content-Security-Policy: scripts, styles and connections from Lassie only; no inline script; images from Lassie or

@@ -6,11 +6,13 @@
 Safety gates (every request):
 - Host must be exactly 127.0.0.1:<port> or localhost:<port> (no DNS rebinding);
 - an Origin header, when sent, must be this server's own;
-- the page is served only with the start token: `/?t=<token>` sets an HttpOnly SameSite=Strict cookie and redirects
-  to `/`; the token is written into the page (a meta tag) for the script;
+- the page is served only with the start token: `/?t=<token>` answers with the page itself (the token is written
+  into a meta tag for the script) and sets an HttpOnly SameSite=Strict cookie holding a separate random secret,
+  not the token; the script then replaces the address with `/`; a plain `/` is never served;
 - POST routes need the token in the X-Lassie-Token header (a page on another local port cannot set it without a
   CORS preflight, which is never answered);
-- GET routes that a browser loads by itself (event stream, images) accept the cookie or the header.
+- GET routes that a browser loads by itself (event stream, images) accept the cookie secret or the token header.
+  The cookie unlocks nothing else.
 
 One rex process per browser session: the page asks for a session id (POST /api/start) and gets its own rex.
 A session whose page has been gone for SESSION_IDLE seconds is closed.
@@ -200,6 +202,7 @@ class LassieServer(ThreadingHTTPServer):
         self.hosts = {"127.0.0.1:%d" % self.port, "localhost:%d" % self.port}
         self.origins = {"http://" + h for h in self.hosts}
         self.cookie = "lassie_%d" % self.port
+        self.cookie_secret = secrets.token_urlsafe(32)   # what the cookie holds: opens events and images only
         self.merman = find_merman() if merman == "auto" else merman
         self.renderer = Renderer(self.merman)
         self.sessions = {}
@@ -325,7 +328,7 @@ class Handler(BaseHTTPRequestHandler):
         return _eq(self.headers.get("X-Lassie-Token", ""), self.server.token)
 
     def _cookie_ok(self):
-        return _eq(self._cookie_token(), self.server.token)
+        return _eq(self._cookie_token(), self.server.cookie_secret)
 
     # --- routing -----------------------------------------------------------------------------------------------
     def do_GET(self):
@@ -386,16 +389,20 @@ class Handler(BaseHTTPRequestHandler):
         if given is not None:
             if not _eq(given, srv.token):
                 return self._reply(403, "forbidden: open the link Lassie printed in its console")
-            cookie = "%s=%s; HttpOnly; SameSite=Strict; Path=/" % (srv.cookie, srv.token)
-            return self._reply(303, "", extra={"Location": "/", "Set-Cookie": cookie})
-        if not self._cookie_ok():
-            return self._reply(403, "forbidden: open the link Lassie printed in its console")
+            cookie = "%s=%s; HttpOnly; SameSite=Strict; Path=/" % (srv.cookie, srv.cookie_secret)
+            return self._page({"Set-Cookie": cookie})
+        if self._cookie_ok():
+            return self._reply(403, "forbidden: open the start link again (the one Lassie printed in its console)")
+        return self._reply(403, "forbidden: open the link Lassie printed in its console")
+
+    def _page(self, extra):
+        srv = self.server
         try:
             page = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
         except OSError:
             return self._reply(500, "page missing")
         page = page.replace("__LASSIE_TOKEN__", srv.token)
-        return self._reply(200, page, "text/html; charset=utf-8")
+        return self._reply(200, page, "text/html; charset=utf-8", extra=extra)
 
     # --- API -----------------------------------------------------------------------------------------------------
     def _api(self, method, route):
