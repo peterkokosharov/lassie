@@ -1,0 +1,24 @@
+; Lassie configuration. Copy to lassie.ini in the Lassie folder (next to the lassie/ package),
+; or name it with --config C:\full\path\lassie.ini or the LASSIE_CONFIG environment variable.
+; Environment variables override these values: LASSIE_ENDPOINT, LASSIE_MODEL, LASSIE_WORKSPACE,
+; LASSIE_PYTHON, LASSIE_REX_DIR, LASSIE_PORT, LASSIE_LANG, LASSIE_LOCAL_TOOLS.
+; --port on the command line wins over both. Lines starting with ; or # are comments.
+
+[lassie]
+; OpenAI-compatible gateway rex talks to (also used for the model list: <endpoint>/v1/models)
+endpoint = http://127.0.0.1:5000
+; model name the gateway knows (the page can change it)
+model = gemini-lite
+; start folder for rex tools (absolute path; the page can change it)
+;workspace = C:\work
+; folder that holds the rex sources (the "runtime" package); put first on PYTHONPATH
+;rex_dir = C:\tools\rex
+; Python that runs rex: absolute path or a bare name found on PATH (never in the current folder);
+; empty = the Python that runs Lassie
+;python = python
+; port on 127.0.0.1 (Lassie never listens on other addresses)
+;port = 4100
+; UI language: en, bg, de, fr, ru or zh (empty = the browser's language)
+;language = en
+; pass --local-tools to rex: tools run on this computer without the Docker guard (yes, like Layka)
+;local_tools = yes
