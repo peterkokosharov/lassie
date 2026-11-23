@@ -61,3 +61,14 @@ def test_render_refuses():
 @pytest.mark.skipif(os.name != "nt", reason="Windows only")
 def test_exe_name_windows():
     assert render.exe_name() == "merman-cli.exe"
+
+
+def test_cache_is_bounded_by_bytes(monkeypatch):
+    from lassie import render
+    monkeypatch.setattr(render, "CACHE_MAX_BYTES", 1000)
+    r = render.Renderer("x")
+    monkeypatch.setattr(r, "_run", lambda src: "<svg>" + "a" * 400 + src + "</svg>")
+    for i in range(10):
+        r.render("graph %d" % i)
+    assert r._cache_bytes <= 1000 and 1 <= len(r._cache) <= 2
+    assert r._cache_bytes == sum(len(v) for v in r._cache.values())

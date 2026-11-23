@@ -26,6 +26,7 @@ log = logging.getLogger("lassie")
 MAX_SOURCE = 50_000
 TIMEOUT = 20
 CACHE_MAX = 100
+CACHE_MAX_BYTES = 64 * 1024 * 1024
 MAX_SVG = 8 * 1024 * 1024
 MAX_PARALLEL = 2
 
@@ -55,6 +56,7 @@ class Renderer:
     def __init__(self, path):
         self.path = path
         self._cache = OrderedDict()
+        self._cache_bytes = 0
         self._lock = threading.Lock()
         self._sem = threading.Semaphore(MAX_PARALLEL)
 
@@ -80,9 +82,11 @@ class Renderer:
         with self._sem:
             svg = self._run(source)
         with self._lock:
-            self._cache[key] = svg
-            while len(self._cache) > CACHE_MAX:
-                self._cache.popitem(last=False)
+            if key not in self._cache:
+                self._cache[key] = svg
+                self._cache_bytes += len(svg)
+            while len(self._cache) > 1 and (len(self._cache) > CACHE_MAX or self._cache_bytes > CACHE_MAX_BYTES):
+                self._cache_bytes -= len(self._cache.popitem(last=False)[1])
         return svg
 
     def _run(self, source):
