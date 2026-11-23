@@ -84,7 +84,8 @@ footer .buttons { display: flex; flex-direction: column; gap: 4px; }
 /* diffs (permission details, tool results) */
 .d-add { background: var(--add-bg); color: var(--add-fg); } .d-del { background: var(--del-bg); color: var(--del-fg); }
 .d-hunk { color: var(--hunk); } .d-file { font-weight: 700; }
-#panelog .d-add, #panelog .d-del { display: inline; }
+#panelog .d-add { background: none; color: #6dbf78; } #panelog .d-del { background: none; color: #f08e8b; }
+#panelog .d-hunk { color: #8ab4f8; }
 /* permission modal */
 dialog { max-width: min(100ch, 94vw); width: 100%; border: 2px solid var(--warn); border-radius: 10px; padding: 12px 16px;
   background: var(--bg); color: var(--fg); }

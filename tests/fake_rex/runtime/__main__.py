@@ -4,7 +4,8 @@
 """A fake rex for tests: `python -P -m runtime --model M --jsonl [--local-tools]` speaking the JSONL protocol.
 
 chat "env"   -> final with the argv, cwd and endpoint it was started with (JSON text)
-chat "perm"  -> permission perm-1, waits for the reply, then tool_start/tool_end (with a diff) and final <decision>
+chat "perm"  -> permission perm-N, waits for the reply, then tool_start/tool_end (with a diff) and final <decision>
+chat "md"    -> final with a table, images and a mermaid block
 chat "slow"  -> tokens until "stop" arrives, then error "interrupted"
 chat other   -> tokens "echo: ", <text>, final, context
 """
@@ -17,6 +18,7 @@ out_lock = threading.Lock()
 replies = {}
 reply_ready = threading.Condition()
 stopped = threading.Event()
+counter = [0]
 
 
 def emit(kind, /, **fields):
@@ -35,14 +37,20 @@ def handle_chat(text):
         emit("final", text=json.dumps({"argv": sys.argv[1:], "cwd": os.getcwd(),
                                        "endpoint": os.environ.get("RUNTIME_LITELLM__BASE_URL")}))
     elif text == "perm":
-        emit("permission", id="perm-1", tool="bash", kind="exec", summary="run ls", detail="--- a\n+++ b\n@@ -1 +1 @@\n-x\n+y",
+        with reply_ready:
+            counter[0] += 1
+            pid = "perm-%d" % counter[0]
+        emit("permission", id=pid, tool="bash", kind="exec", summary="run ls", detail="--- a\n+++ b\n@@ -1 +1 @@\n-x\n+y",
              args={"command": "ls"}, rule=None, reason="")
         with reply_ready:
-            reply_ready.wait_for(lambda: "perm-1" in replies, timeout=10)
-            decision = replies.get("perm-1", "timeout")
+            reply_ready.wait_for(lambda: pid in replies, timeout=10)
+            decision = replies.get(pid, "timeout")
         emit("tool_start", name="bash", args={"command": "ls"})
         emit("tool_end", ok=decision != "deny", error=None if decision != "deny" else "denied", diff="@@ -1 +1 @@\n-a\n+b")
         emit("final", text=decision)
+    elif text == "md":
+        emit("final", text="# Title\n\n| a | b |\n|---|--:|\n| 1 | 2 |\n\n![pic](pic.png) and ![out](../x.png)\n\n"
+                           "```mermaid\ngraph TD; A-->B\n```\n\n- one\n- two <b>not bold</b>\n")
     elif text == "slow":
         stopped.clear()
         while not stopped.wait(0.05):
