@@ -54,6 +54,7 @@ STATIC = {
 MAX_BODY = 1024 * 1024
 MAX_TEXT = 200_000
 MAX_EVENTS = 20_000          # events kept per session for a reconnecting page
+MAX_EVENT_BYTES = 32 * 1024 * 1024   # ... and at most this many bytes of them (a final answer can be 4 MB)
 HEARTBEAT = 15.0             # seconds between SSE keep-alive comments
 SESSION_IDLE = 120.0         # a session without a connected page for this long is closed
 MAX_SESSIONS = 8
@@ -80,7 +81,8 @@ class Session:
         self.endpoint = ""
         self.busy = False
         self.pending = set()          # permission ids rex asked and nobody answered yet
-        self.events = deque()         # (seq, event)
+        self.events = deque()         # (seq, event, size in bytes)
+        self.event_bytes = 0
         self.seq = 0
         self.cond = threading.Condition()
         self.clients = 0
@@ -100,16 +102,24 @@ class Session:
             if t in ("bye", "exit"):
                 self.pending.clear()
             self.seq += 1
-            self.events.append((self.seq, event))
-            while len(self.events) > MAX_EVENTS:
-                self.events.popleft()
+            size = len(json.dumps(event, ensure_ascii=False)) + 32
+            self.events.append((self.seq, event, size))
+            self.event_bytes += size
+            while len(self.events) > 1 and (len(self.events) > MAX_EVENTS or self.event_bytes > MAX_EVENT_BYTES):
+                self.event_bytes -= self.events.popleft()[2]
             self.cond.notify_all()
 
     def since(self, seq, timeout):
         with self.cond:
             if self.seq <= seq and not self.closed:
                 self.cond.wait(timeout)
-            return [(s, e) for s, e in self.events if s > seq]
+            out = []
+            for s, e, _ in reversed(self.events):     # newest first: stop at the first one already seen
+                if s <= seq:
+                    break
+                out.append((s, e))
+            out.reverse()
+            return out
 
     def note(self, kind, **fields):
         """A Lassie event (not from rex)."""
@@ -158,7 +168,7 @@ class Session:
         if decision not in DECISIONS:
             decision = "deny"
         with self.cond:
-            if pid not in self.pending:
+            if not isinstance(pid, str) or pid not in self.pending:
                 return "no such question"
             self.pending.discard(pid)
         if not self.send({"type": "permission_reply", "id": pid, "decision": decision}):
@@ -233,6 +243,8 @@ class LassieServer(ThreadingHTTPServer):
             return ses
 
     def drop(self, sid):
+        if not isinstance(sid, str):
+            return
         with self.lock:
             ses = self.sessions.pop(sid, None)
         if ses:
@@ -267,6 +279,7 @@ class LassieServer(ThreadingHTTPServer):
 class Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
     server_version = "lassie"
+    timeout = 60                  # a client that stops sending (slow loris) is dropped; the event stream only writes
 
     def log_message(self, fmt, *args):
         log.debug("%s %s", self.address_string(), (fmt % args).split("?")[0])

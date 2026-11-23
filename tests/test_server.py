@@ -295,3 +295,30 @@ def test_start_racing_close_leaves_no_rex(srv, tmp_path, monkeypatch):
     assert not any(r.running for r in made)
     with pytest.raises(server_mod.RexError):
         ses.start(srv.cfg, "http://127.0.0.1:9", "m1", str(tmp_path))
+
+
+# --- event buffer, odd ids, timeout ------------------------------------------------------------------------------
+def test_event_buffer_capped_by_bytes_and_since_is_correct(monkeypatch):
+    monkeypatch.setattr(server_mod, "MAX_EVENT_BYTES", 10_000)
+    ses = server_mod.Session("s")
+    for i in range(50):
+        ses.push({"type": "token", "text": "x" * 1000, "n": i})
+    assert ses.event_bytes <= 10_000 + 1100 and len(ses.events) < 50
+    assert ses.since(48, 0) == [(49, ses.events[-2][1]), (50, ses.events[-1][1])]
+    assert [s for s, _ in ses.since(0, 0)][-1] == 50 and ses.since(50, 0) == []
+    ses.push({"type": "token", "text": "y" * 50_000})          # one huge event is still kept (the newest)
+    assert len(ses.events) == 1
+
+
+def test_non_string_ids_are_harmless(srv, tmp_path):
+    sid = start(srv, tmp_path)
+    for bad in ([1], {"a": 1}, 5, None, True):
+        assert api(srv, "permission", {"sid": sid, "id": bad, "decision": "deny"})[0] == 409
+        assert api(srv, "permission", {"sid": bad, "id": "x", "decision": "deny"})[0] == 404
+        assert api(srv, "close", {"sid": bad})[0] == 200
+        assert api(srv, "chat", {"sid": bad, "text": "x"})[0] == 404
+    assert srv.session(sid) is not None
+
+
+def test_handler_has_a_read_timeout():
+    assert server_mod.Handler.timeout == 60
