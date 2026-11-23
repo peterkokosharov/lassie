@@ -284,6 +284,7 @@ function openStream() {
 
 // ---- actions ---------------------------------------------------------------------------------------------
 async function start() {
+  if (starting) return false;   // a second click while rex is coming up
   const body = { sid, endpoint: $("endpoint").value.trim(), model: getModel(), workspace: $("workspace").value.trim() };
   running = false; starting = true; setStatus();
   const r = await post("start", body);

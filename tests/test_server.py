@@ -234,3 +234,61 @@ def test_parse_models_and_sse_frame():
     assert parse_models({"data": [{"id": "b"}, {"id": "a"}, {"id": "a"}, {"x": 1}, "c"]}) == ["a", "b", "c"]
     assert parse_models("junk") == []
     assert sse_frame(3, {"type": "token", "text": "a\nb"}) == b'id: 3\ndata: {"type": "token", "text": "a\\nb"}\n\n'
+
+
+# --- start / stop / close are serialised -------------------------------------------------------------------------
+def _spy_rex(monkeypatch):
+    made = []
+    real = server_mod.RexProcess
+
+    def make(*a, **k):
+        r = real(*a, **k)
+        made.append(r)
+        return r
+    monkeypatch.setattr(server_mod, "RexProcess", make)
+    return made
+
+
+def _wait_gone(procs, timeout=15):
+    end = time.monotonic() + timeout
+    while any(p.running for p in procs) and time.monotonic() < end:
+        time.sleep(0.05)
+
+
+def test_concurrent_starts_leave_one_rex(srv, tmp_path, monkeypatch):
+    made = _spy_rex(monkeypatch)
+    ses = srv.new_session()
+    ts = [threading.Thread(target=ses.start, args=(srv.cfg, "http://127.0.0.1:9", "m1", str(tmp_path)))
+          for _ in range(4)]
+    for t in ts:
+        t.start()
+    for t in ts:
+        t.join(30)
+    assert len(made) == 4
+    _wait_gone([r for r in made if r is not ses.rex])
+    assert [r for r in made if r.running] == [ses.rex]
+    srv.drop(ses.sid)
+    _wait_gone(made)
+    assert not any(r.running for r in made)
+
+
+def test_start_racing_close_leaves_no_rex(srv, tmp_path, monkeypatch):
+    made = _spy_rex(monkeypatch)
+    ses = srv.new_session()
+    errors = []
+
+    def go():
+        try:
+            ses.start(srv.cfg, "http://127.0.0.1:9", "m1", str(tmp_path))
+        except server_mod.RexError as exc:
+            errors.append(str(exc))
+    ts = [threading.Thread(target=go) for _ in range(3)]
+    for t in ts:
+        t.start()
+    ses.close()
+    for t in ts:
+        t.join(30)
+    _wait_gone(made)
+    assert not any(r.running for r in made)
+    with pytest.raises(server_mod.RexError):
+        ses.start(srv.cfg, "http://127.0.0.1:9", "m1", str(tmp_path))

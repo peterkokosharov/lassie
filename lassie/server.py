@@ -85,6 +85,7 @@ class Session:
         self.last_seen = time.monotonic()
         self.closed = False
         self.gen = 0                  # rex generation: events of a replaced rex are dropped
+        self.life = threading.Lock()  # start / stop / close run one at a time
 
     # --- events -----------------------------------------------------------------------------------------
     def push(self, event):
@@ -115,16 +116,19 @@ class Session:
     # --- rex ----------------------------------------------------------------------------------------------
     def start(self, cfg, endpoint, model, workspace):
         argv, env, cwd = build_command(cfg, endpoint, model, workspace)
-        self.gen += 1                 # first: the old rex's last events (exit) are dropped
-        gen = self.gen
-        self.stop()
-        with self.cond:
-            self.busy = False
-            self.pending.clear()
-        self.endpoint, self.model, self.workspace = check_endpoint(endpoint), model.strip(), cwd
-        log.info("session %s: rex start in %s", self.sid[:6], cwd)
-        self.note("starting", workspace=cwd, model=self.model, endpoint=self.endpoint)
-        self.rex = RexProcess(argv, env, cwd, lambda event: self._from_rex(event, gen))
+        with self.life:
+            if self.closed:
+                raise RexError("session closed")
+            self.gen += 1             # first: the old rex's last events (exit) are dropped
+            gen = self.gen
+            self._stop()
+            with self.cond:
+                self.busy = False
+                self.pending.clear()
+            self.endpoint, self.model, self.workspace = check_endpoint(endpoint), model.strip(), cwd
+            log.info("session %s: rex start in %s", self.sid[:6], cwd)
+            self.note("starting", workspace=cwd, model=self.model, endpoint=self.endpoint)
+            self.rex = RexProcess(argv, env, cwd, lambda event: self._from_rex(event, gen))
 
     def _from_rex(self, event, gen):
         if gen == self.gen:
@@ -161,6 +165,10 @@ class Session:
         return None
 
     def stop(self):
+        with self.life:
+            self._stop()
+
+    def _stop(self):
         rex, self.rex = self.rex, None
         if rex is not None:
             for pid in list(self.pending):     # rex denies them anyway when stdin closes; say it explicitly
@@ -168,9 +176,10 @@ class Session:
             rex.stop()
 
     def close(self):
-        self.stop()
+        with self.life:
+            self.closed = True        # no start can follow
+            self._stop()
         with self.cond:
-            self.closed = True
             self.cond.notify_all()
 
 
