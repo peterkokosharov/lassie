@@ -260,10 +260,11 @@ class LassieServer(ThreadingHTTPServer):
         if ses:
             ses.close()
 
-    def reap(self, idle=None):
-        """Close sessions whose page has been gone for `idle` seconds. Returns the closed ids."""
+    def reap(self, idle=None, now=None):
+        """Close sessions whose page has been gone for `idle` seconds. Returns the closed ids.
+        `now` is the clock reading (time.monotonic by default); tests pass it in."""
         idle = SESSION_IDLE if idle is None else idle
-        now = time.monotonic()
+        now = time.monotonic() if now is None else now
         with self.lock:
             gone = [s.sid for s in self.sessions.values() if s.clients == 0 and now - s.last_seen > idle]
         for sid in gone:

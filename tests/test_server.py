@@ -221,8 +221,9 @@ def test_render_route(srv):
 
 def test_reaper_closes_sessions_without_a_page(srv, tmp_path):
     sid = start(srv, tmp_path)
-    assert srv.reap(idle=3600) == []
-    assert srv.reap(idle=0) == [sid]
+    seen = srv.session(sid).last_seen
+    assert srv.reap(idle=3600, now=seen + 10) == []
+    assert srv.reap(idle=3600, now=seen + 3601) == [sid]      # injected clock: no dependence on timer resolution
     assert srv.session(sid) is None
 
 
