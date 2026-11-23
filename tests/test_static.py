@@ -46,7 +46,7 @@ def test_page_has_no_inline_script():
 def test_language_bundles(code):
     en = json.loads((PKG / "lang" / "en.json").read_text(encoding="utf-8"))
     bundle = json.loads((PKG / "lang" / (code + ".json")).read_text(encoding="utf-8"))
-    assert set(bundle) <= set(en)
+    assert code == "en" or set(bundle) == set(en) - {"_comment"}
     for key, value in bundle.items():
         assert isinstance(value, str)
         assert set(re.findall(r"\{\w+\}", value)) == set(re.findall(r"\{\w+\}", en[key])), (code, key)
