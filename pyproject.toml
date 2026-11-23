@@ -1,0 +1,12 @@
+[project]
+name = "lassie"
+version = "0.1.0"
+description = "Lassie - a browser window for the rex agent"
+license = "MIT"
+authors = [{ name = "Peter Kokosharov", email = "peter.kokosharov@gmail.com" }]
+requires-python = ">=3.12"
+dependencies = []
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

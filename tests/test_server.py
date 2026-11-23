@@ -1,0 +1,236 @@
+# lassie - the web front-end for rex
+# Copyright (c) 2026 Peter Kokosharov <peter.kokosharov@gmail.com>
+# SPDX-License-Identifier: MIT
+"""Safety gates (Host, Origin, token, cookie) and the JSONL relay with a fake rex, over real HTTP."""
+import http.client
+import json
+import sys
+import threading
+import time
+from pathlib import Path
+
+import pytest
+
+from lassie import server as server_mod
+from lassie.config import Config
+from lassie.server import LassieServer, parse_models, sse_frame
+
+HERE = Path(__file__).resolve().parent
+FAKE_REX = HERE / "fake_rex"
+FAKE_MERMAN = HERE / "fake_merman" / "fake_merman.py"
+TOKEN = "test-token-123"
+
+
+@pytest.fixture
+def srv(tmp_path):
+    cfg = Config(port=0, rex_dir=str(FAKE_REX), python=sys.executable, workspace=str(tmp_path),
+                 endpoint="http://127.0.0.1:9", model="m1")
+    s = LassieServer(cfg, token=TOKEN, merman=str(FAKE_MERMAN))
+    t = threading.Thread(target=s.serve_forever, kwargs={"poll_interval": 0.1}, daemon=True)
+    t.start()
+    yield s
+    s.close_all()
+    s.shutdown()
+    s.server_close()
+
+
+def request(s, method, path, body=None, headers=None, host=None):
+    c = http.client.HTTPConnection("127.0.0.1", s.port, timeout=10)
+    h = {"Host": host or "127.0.0.1:%d" % s.port}
+    h.update(headers or {})
+    data = None
+    if body is not None:
+        data = json.dumps(body).encode()
+        h["Content-Type"] = "application/json"
+    c.request(method, path, body=data, headers=h)
+    r = c.getresponse()
+    raw = r.read()
+    c.close()
+    try:
+        payload = json.loads(raw)
+    except ValueError:
+        payload = raw
+    return r.status, r.headers, payload
+
+
+def api(s, route, body):
+    return request(s, "POST", "/api/" + route, body, {"X-Lassie-Token": TOKEN})
+
+
+# --- gates -----------------------------------------------------------------------------------------------------
+def test_host_header_checked(srv):
+    assert request(srv, "GET", "/static/app.js", host="evil.example:%d" % srv.port)[0] == 403
+    assert request(srv, "GET", "/static/app.js", host="127.0.0.1")[0] == 403
+    assert request(srv, "GET", "/static/app.js")[0] == 200
+    assert request(srv, "GET", "/static/app.js", host="localhost:%d" % srv.port)[0] == 200
+
+
+def test_page_needs_token_then_cookie(srv):
+    assert request(srv, "GET", "/")[0] == 403
+    assert request(srv, "GET", "/?t=wrong")[0] == 403
+    status, headers, _ = request(srv, "GET", "/?t=" + TOKEN)
+    assert status == 303 and headers["Location"] == "/"
+    cookie = headers["Set-Cookie"]
+    assert "HttpOnly" in cookie and "SameSite=Strict" in cookie
+    pair = cookie.split(";")[0]
+    status, headers, page = request(srv, "GET", "/", headers={"Cookie": pair})
+    assert status == 200
+    assert TOKEN.encode() in page and b"__LASSIE_TOKEN__" not in page
+    assert "script-src 'self'" in headers["Content-Security-Policy"]
+    assert request(srv, "GET", "/", headers={"Cookie": "lassie_%d=nope" % srv.port})[0] == 403
+
+
+def test_api_needs_header_token(srv):
+    assert request(srv, "GET", "/api/state")[0] == 403
+    assert request(srv, "POST", "/api/start", {})[0] == 403
+    cookie = {"Cookie": "lassie_%d=%s" % (srv.port, TOKEN)}
+    assert request(srv, "POST", "/api/start", {}, cookie)[0] == 403       # a cookie alone never drives rex
+    status, _, state = request(srv, "GET", "/api/state", headers={"X-Lassie-Token": TOKEN})
+    assert status == 200 and state["model"] == "m1" and state["merman"] is True
+
+
+def test_foreign_origin_refused(srv):
+    h = {"X-Lassie-Token": TOKEN, "Origin": "http://127.0.0.1:1234"}
+    assert request(srv, "GET", "/api/state", headers=h)[0] == 403
+    h["Origin"] = "http://127.0.0.1:%d" % srv.port
+    assert request(srv, "GET", "/api/state", headers=h)[0] == 200
+
+
+def test_binds_loopback_only(srv):
+    assert srv.server_address[0] == "127.0.0.1"
+
+
+# --- relay -----------------------------------------------------------------------------------------------------
+class Stream:
+    """Reads SSE events in a thread."""
+
+    def __init__(self, s, sid, auth):
+        self.events = []
+        self.cond = threading.Condition()
+        self.conn = http.client.HTTPConnection("127.0.0.1", s.port, timeout=30)
+        h = {"Host": "127.0.0.1:%d" % s.port}
+        h.update(auth)
+        self.conn.request("GET", "/api/events?sid=" + sid, headers=h)
+        self.resp = self.conn.getresponse()
+        assert self.resp.status == 200
+        threading.Thread(target=self._read, daemon=True).start()
+
+    def _read(self):
+        try:
+            for raw in self.resp:
+                line = raw.decode().rstrip("\n")
+                if line.startswith("data: "):
+                    with self.cond:
+                        self.events.append(json.loads(line[6:]))
+                        self.cond.notify_all()
+        except (OSError, ValueError):
+            pass
+
+    def wait(self, pred, timeout=15):
+        end = time.monotonic() + timeout
+        with self.cond:
+            while True:
+                hit = [e for e in self.events if pred(e)]
+                if hit:
+                    return hit[-1]
+                left = end - time.monotonic()
+                assert left > 0, "timeout; events: %r" % self.events[-10:]
+                self.cond.wait(left)
+
+    def close(self):
+        self.conn.close()
+
+
+def start(srv, tmp_path):
+    status, _, data = api(srv, "start", {"endpoint": "http://127.0.0.1:9/", "model": "m1", "workspace": str(tmp_path)})
+    assert status == 200, data
+    return data["sid"]
+
+
+def test_relay_chat_permission_model_reset(srv, tmp_path):
+    sid = start(srv, tmp_path)
+    st = Stream(srv, sid, {"Cookie": "lassie_%d=%s" % (srv.port, TOKEN)})
+    try:
+        assert st.wait(lambda e: e["type"] == "ready")["model"] == "m1"
+        st.wait(lambda e: e["type"] == "log" and "fake rex starting" in e["text"])
+
+        assert api(srv, "chat", {"sid": sid, "text": "env"})[0] == 200
+        env = json.loads(st.wait(lambda e: e["type"] == "final")["text"])
+        assert env["argv"][-4:] == ["--model", "m1", "--jsonl", "--local-tools"]
+        assert env["endpoint"] == "http://127.0.0.1:9"
+        assert Path(env["cwd"]).resolve() == tmp_path.resolve()
+
+        assert api(srv, "chat", {"sid": sid, "text": "hello"})[0] == 200
+        assert st.wait(lambda e: e["type"] == "final" and e["text"] == "echo: hello")
+        assert st.wait(lambda e: e["type"] == "context")["percent"] == 90
+
+        assert api(srv, "chat", {"sid": sid, "text": "perm"})[0] == 200
+        q = st.wait(lambda e: e["type"] == "permission")
+        assert api(srv, "chat", {"sid": sid, "text": "again"})[0] == 409            # busy while a turn runs
+        assert api(srv, "permission", {"sid": sid, "id": "perm-9", "decision": "allow_once"})[0] == 409
+        assert api(srv, "permission", {"sid": sid, "id": q["id"], "decision": "bogus"})[0] == 200
+        assert api(srv, "permission", {"sid": sid, "id": q["id"], "decision": "allow_once"})[0] == 409  # once only
+        assert st.wait(lambda e: e["type"] == "final" and e["text"] in ("deny", "allow_once"))["text"] == "deny"
+        end = st.wait(lambda e: e["type"] == "tool_end")
+        assert end["ok"] is False and end["diff"].startswith("@@")
+
+        assert api(srv, "model", {"sid": sid, "model": "m2"})[0] == 200
+        assert st.wait(lambda e: e["type"] == "model_ok")["model"] == "m2"
+        assert api(srv, "reset", {"sid": sid})[0] == 200
+        st.wait(lambda e: e["type"] == "reset_ok")
+
+        assert api(srv, "chat", {"sid": sid, "text": "slow"})[0] == 200
+        st.wait(lambda e: e["type"] == "token" and e["text"] == ".")
+        assert api(srv, "stop", {"sid": sid})[0] == 200
+        st.wait(lambda e: e["type"] == "error" and e["message"] == "interrupted")
+
+        assert api(srv, "close", {"sid": sid})[0] == 200
+        assert srv.session(sid) is None
+    finally:
+        st.close()
+
+
+def test_start_errors_are_reported(srv, tmp_path):
+    status, _, data = api(srv, "start", {"endpoint": "ftp://x", "model": "m", "workspace": str(tmp_path)})
+    assert status == 400 and "http" in data["error"]
+    status, _, data = api(srv, "start", {"endpoint": "http://x", "model": "m", "workspace": str(tmp_path / "nope")})
+    assert status == 400 and "workspace" in data["error"]
+    assert api(srv, "chat", {"sid": "unknown", "text": "x"})[0] == 404
+
+
+def test_image_route_confined(srv, tmp_path):
+    (tmp_path / "a.png").write_bytes(b"\x89PNGdata")
+    (tmp_path.parent / "secret.png").write_bytes(b"\x89PNGsecret")
+    sid = start(srv, tmp_path)
+    cookie = {"Cookie": "lassie_%d=%s" % (srv.port, TOKEN)}
+    status, headers, body = request(srv, "GET", "/api/image?sid=%s&path=a.png" % sid, headers=cookie)
+    assert status == 200 and body == b"\x89PNGdata" and headers["Content-Type"] == "image/png"
+    assert request(srv, "GET", "/api/image?sid=%s&path=../secret.png" % sid, headers=cookie)[0] == 404
+    assert request(srv, "GET", "/api/image?sid=%s&path=a.png" % sid)[0] == 403          # no cookie, no token
+
+
+def test_render_route(srv):
+    status, _, data = api(srv, "render", {"source": "graph TD; A-->B"})
+    assert status == 200 and data["svg"].startswith("<svg")
+    status, _, data = api(srv, "render", {"source": "fail"})
+    assert status == 200 and "Parse error" in data["error"]
+
+
+def test_reaper_closes_sessions_without_a_page(srv, tmp_path):
+    sid = start(srv, tmp_path)
+    assert srv.reap(idle=3600) == []
+    assert srv.reap(idle=0) == [sid]
+    assert srv.session(sid) is None
+
+
+def test_session_limit(srv, tmp_path, monkeypatch):
+    monkeypatch.setattr(server_mod, "MAX_SESSIONS", 1)
+    start(srv, tmp_path)
+    status, _, _ = api(srv, "start", {"endpoint": "http://x", "model": "m", "workspace": str(tmp_path)})
+    assert status == 503
+
+
+def test_parse_models_and_sse_frame():
+    assert parse_models({"data": [{"id": "b"}, {"id": "a"}, {"id": "a"}, {"x": 1}, "c"]}) == ["a", "b", "c"]
+    assert parse_models("junk") == []
+    assert sse_frame(3, {"type": "token", "text": "a\nb"}) == b'id: 3\ndata: {"type": "token", "text": "a\\nb"}\n\n'

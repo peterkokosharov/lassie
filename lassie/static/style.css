@@ -1,0 +1,98 @@
+/* lassie - the web front-end for rex. Copyright (c) 2026 Peter Kokosharov. SPDX-License-Identifier: MIT */
+/* The look is taken from kircho: every colour is a variable; dark follows the system setting (a Darcula-like grey). */
+:root { color-scheme: light dark; --size: 16px;
+  --bg: #fff; --fg: #1c1c1c; --muted: #6b6b6b; --line: #d8d8d8; --box: #f3f4f6; --user: #dbeafe; --code: #f6f8fa;
+  --accent: #2563eb; --on-accent: #fff; --link: #2563eb; --ok: #1f7a3a; --warn: #e07b00; --danger: #c0392b;
+  --idle: #9a9a9a; --c: #6a737d; --s: #0a7a3d; --k: #b5179e; --n: #b45309;
+  --add-bg: #e6f4ea; --add-fg: #14532d; --del-bg: #fde8e8; --del-fg: #7f1d1d; --hunk: #1d4ed8;
+  --term-bg: #1e1e1e; --term-fg: #d4d4d4; }
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #2b2b2b; --fg: #a9b7c6; --muted: #b4b9bd; --line: #4a4c4e; --box: #3c3f41; --user: #2d4a66; --code: #313335;
+    --accent: #4b6eaf; --on-accent: #fff; --link: #589df6; --ok: #6dbf78; --warn: #f0a040; --danger: #f08e8b;
+    --idle: #808080; --c: #a0a0a0; --s: #98bd7e; --k: #e8964f; --n: #86b6e0;
+    --add-bg: #2f4a35; --add-fg: #c8e6c9; --del-bg: #5a3030; --del-fg: #ffd0d0; --hunk: #8ab4f8;
+    --term-bg: #1b1b1b; --term-fg: #c8c8c8; }
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { display: flex; flex-direction: column; background: var(--bg); color: var(--fg);
+  font: var(--size)/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+header, footer { display: flex; gap: 10px; align-items: center; padding: 8px 12px; border-color: var(--line); }
+header { border-bottom: 1px solid; flex-wrap: wrap; }
+footer { border-top: 1px solid; align-items: stretch; }
+header label { display: flex; gap: 6px; align-items: center; color: var(--muted); font-size: 0.9em; }
+input, select { font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; min-height: 32px; }
+.logo { display: block; }
+.meta { color: var(--muted); font-size: 0.85em; }
+.grow { flex: 1; }
+.dot { width: 12px; height: 12px; border-radius: 50%; background: var(--idle); }
+.dot.busy { background: var(--warn); }
+.dot.idle { background: var(--ok); }
+.dot.off { background: var(--danger); }
+.ctx { font: 0.85em ui-monospace, Consolas, monospace; padding: 2px 6px; border: 1px solid var(--line); border-radius: 6px; }
+.ctx.warn { color: #fff; background: var(--warn); border-color: var(--warn); }
+main { flex: 1; overflow-y: auto; padding: 12px; min-height: 0; }
+button { min-height: 36px; min-width: 44px; padding: 4px 14px; font: inherit; color: inherit;
+  background: var(--box); border: 1px solid var(--line); border-radius: 6px; cursor: pointer; }
+button:disabled { opacity: 0.5; cursor: default; }
+button.hot { border-color: var(--warn); box-shadow: 0 0 0 1px var(--warn); }
+textarea { flex: 1; resize: vertical; font: inherit; color: inherit; background: var(--bg);
+  border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; min-height: 36px; }
+footer .buttons { display: flex; flex-direction: column; gap: 4px; }
+.plus { font-weight: 700; font-size: 1.2em; padding: 0; width: 44px; }
+.plus.news { border-color: var(--accent); color: var(--accent); }
+.keys { padding: 0 12px 6px; white-space: pre; }
+.block { margin: 8px 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.user { margin-left: auto; max-width: 80%; padding: 8px 12px; background: var(--user); border-radius: 10px; width: fit-content; }
+.assistant { max-width: 90ch; }
+.assistant.md { white-space: normal; }
+.streaming { opacity: 0.9; }
+.sys { color: var(--muted); font-size: 0.8em; margin: 4px 0; }
+.sys.err { color: var(--danger); }
+.sys.tool { font-family: ui-monospace, Consolas, monospace; }
+[hidden] { display: none !important; }
+/* Markdown */
+.md > :first-child { margin-top: 0; } .md > :last-child { margin-bottom: 0; }
+.md p, .md ul, .md ol, .md blockquote, .md .code, .md .tablewrap, .md h1, .md h2, .md h3, .md h4 { margin: 0.5em 0; }
+.md h1 { font-size: 1.4em; } .md h2 { font-size: 1.25em; } .md h3 { font-size: 1.1em; } .md h4, .md h5, .md h6 { font-size: 1em; }
+.md ul, .md ol { padding-left: 1.6em; }
+.md blockquote { padding: 0 12px; border-left: 3px solid var(--line); color: var(--muted); }
+.md hr { border: 0; border-top: 1px solid var(--line); }
+.md a { color: var(--link); }
+.md code { font: 0.9em ui-monospace, Consolas, monospace; background: var(--code); padding: 1px 4px; border-radius: 4px; }
+.code { background: var(--code); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.codebar { display: flex; justify-content: space-between; align-items: center; padding: 2px 8px; color: var(--muted); font-size: 0.8em; border-bottom: 1px solid var(--line); }
+.codebar button { min-height: 24px; padding: 0 8px; font-size: 0.9em; }
+.code pre { margin: 0; padding: 8px 10px; overflow-x: auto; white-space: pre; }
+.code pre code { background: none; padding: 0; font-size: 0.85em; }
+.tk-c { color: var(--c); font-style: italic; } .tk-s { color: var(--s); } .tk-k { color: var(--k); } .tk-n { color: var(--n); }
+.tablewrap { overflow-x: auto; }
+.md table { border-collapse: collapse; }
+.md th, .md td { border: 1px solid var(--line); padding: 4px 10px; }
+.md th { background: var(--box); }
+.al-center { text-align: center; } .al-right { text-align: right; }
+.md img.local, .diagram img { max-width: 100%; height: auto; background: #fff; border-radius: 6px; }
+.diagram { margin: 0.5em 0; }
+/* the "+" tools pane: a terminal-like log of tool_start / tool_end */
+#pane { border-top: 1px solid var(--line); background: var(--term-bg); color: var(--term-fg); height: 30vh; min-height: 80px;
+  display: flex; flex-direction: column; resize: vertical; overflow: hidden; }
+.panehead { display: flex; justify-content: space-between; align-items: center; padding: 2px 8px; font-size: 0.8em; color: #9a9a9a; }
+.panehead button { min-height: 24px; padding: 0 8px; font-size: 0.9em; color: #ccc; background: #333; border-color: #555; }
+#panelog { flex: 1; margin: 0; padding: 4px 10px; overflow: auto; font: 0.85em/1.4 ui-monospace, Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+#panelog .cmd { color: #8ab4f8; } #panelog .ok { color: #6dbf78; } #panelog .bad { color: #f08e8b; } #panelog .logline { color: #8a8a8a; }
+/* diffs (permission details, tool results) */
+.d-add { background: var(--add-bg); color: var(--add-fg); } .d-del { background: var(--del-bg); color: var(--del-fg); }
+.d-hunk { color: var(--hunk); } .d-file { font-weight: 700; }
+#panelog .d-add, #panelog .d-del { display: inline; }
+/* permission modal */
+dialog { max-width: min(100ch, 94vw); width: 100%; border: 2px solid var(--warn); border-radius: 10px; padding: 12px 16px;
+  background: var(--bg); color: var(--fg); }
+dialog::backdrop { background: rgba(0, 0, 0, 0.45); }
+dialog h2 { margin: 0 0 6px; font-size: 1.1em; }
+dialog .summary { font-weight: 600; margin: 4px 0; overflow-wrap: anywhere; }
+dialog .detail { max-height: 50vh; overflow: auto; margin: 6px 0; padding: 6px 8px; background: var(--code); border: 1px solid var(--line);
+  border-radius: 6px; font: 0.85em/1.4 ui-monospace, Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+dialog .detail:empty { display: none; }
+dialog .buttons { display: flex; gap: 8px; justify-content: flex-end; }
+dialog .deny { border-color: var(--danger); }

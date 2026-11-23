@@ -1,0 +1,62 @@
+<!doctype html>
+<!-- lassie - the web front-end for rex. Copyright (c) 2026 Peter Kokosharov. SPDX-License-Identifier: MIT -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="lassie-token" content="__LASSIE_TOKEN__">
+<title>Lassie</title>
+<link rel="icon" href="/static/lassie.svg" type="image/svg+xml">
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header>
+  <img class="logo" src="/static/lassie.svg" alt="" width="28" height="28">
+  <strong>Lassie</strong>
+  <label><span data-s="endpoint">Endpoint</span> <input id="endpoint" type="url" size="24" spellcheck="false"></label>
+  <label><span data-s="model">Model</span> <input id="model" list="models" size="16" spellcheck="false"></label>
+  <datalist id="models"></datalist>
+  <button id="getmodels" type="button" data-s="models">Models</button>
+  <label class="wide"><span data-s="workspace">Workspace</span> <input id="workspace" size="30" spellcheck="false"></label>
+  <button id="start" type="button" data-s="start">Start</button>
+  <span class="grow"></span>
+  <span id="dot" class="dot off" title=""></span>
+  <span id="status" class="meta"></span>
+  <span id="ctx" class="ctx" hidden></span>
+  <select id="lang" aria-label="Language">
+    <option value="en">EN</option><option value="bg">BG</option><option value="de">DE</option>
+    <option value="fr">FR</option><option value="ru">RU</option><option value="zh">ZH</option>
+  </select>
+</header>
+<main id="log" aria-live="polite"></main>
+<section id="pane" hidden>
+  <div class="panehead"><span data-s="paneTitle">Tools</span> <button id="paneclear" type="button" data-s="clear">Clear</button></div>
+  <pre id="panelog"></pre>
+</section>
+<footer>
+  <button id="plus" type="button" class="plus" aria-pressed="false" data-st="paneToggle" title="Tools">+</button>
+  <textarea id="input" rows="3" data-sp="placeholder" placeholder="Message"></textarea>
+  <div class="buttons">
+    <button id="send" type="button" data-s="send">Send</button>
+    <button id="stop" type="button" data-s="stop">Stop</button>
+    <button id="reset" type="button" data-s="reset">Reset</button>
+  </div>
+</footer>
+<div id="keys" class="keys meta" data-s="keys">Alt-S Send  Alt-T Stop  Alt-R Reset</div>
+<dialog id="perm">
+  <h2 data-s="permTitle">Permission</h2>
+  <p id="perm-summary" class="summary"></p>
+  <p class="meta"><span id="perm-tool"></span> <span id="perm-kind"></span> <span id="perm-rule"></span></p>
+  <p id="perm-reason" class="meta"></p>
+  <pre id="perm-detail" class="detail"></pre>
+  <p id="perm-more" class="meta"></p>
+  <div class="buttons">
+    <button id="perm-once" type="button" data-s="allowOnce">Allow once</button>
+    <button id="perm-always" type="button" data-s="allowAlways">Allow always</button>
+    <button id="perm-deny" type="button" class="deny" data-s="deny">Deny</button>
+  </div>
+</dialog>
+<script type="module" src="/static/app.js"></script>
+</body>
+</html>

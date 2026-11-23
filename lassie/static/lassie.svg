@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 256 256" width="256" height="256">
+  <title>Lassie - Rough collie</title>
+  <defs>
+    <path id="head" d="M78 96 Q76 54 128 50 Q180 54 178 96 Q176 130 152 160 L144 188 Q128 204 112 188 L104 160 Q80 130 78 96 Z"/>
+  </defs>
+  <path d="M72 104 Q54 120 46 150 Q30 160 38 184 Q26 206 44 224 Q60 248 92 244 Q128 254 164 244 Q196 248 212 224 Q230 206 218 184 Q226 160 210 150 Q202 120 184 104 Z" fill="#ffffff" stroke="#2d2a32" stroke-width="6" stroke-linejoin="round"/>
+  <g stroke="#2d2a32" stroke-width="6" stroke-linejoin="round">
+    <path d="M82 80 L72 24 Q106 22 124 58 Z" fill="#d98a3a"/>
+    <path d="M174 80 L184 24 Q150 22 132 58 Z" fill="#d98a3a"/>
+  </g>
+  <path d="M72 24 Q90 24 100 34 L76 48 Z" fill="#a8601c"/>
+  <path d="M184 24 Q166 24 156 34 L180 48 Z" fill="#a8601c"/>
+  <use xlink:href="#head" fill="#d98a3a"/>
+  <path d="M120 52 H136 L142 116 L152 160 L144 188 Q128 204 112 188 L104 160 L114 116 Z" fill="#ffffff"/>
+  <use xlink:href="#head" fill="none" stroke="#2d2a32" stroke-width="6" stroke-linejoin="round"/>
+  <ellipse cx="100" cy="100" rx="9" ry="7" fill="#2d2a32" transform="rotate(12 100 100)"/>
+  <ellipse cx="156" cy="100" rx="9" ry="7" fill="#2d2a32" transform="rotate(-12 156 100)"/>
+  <circle cx="103" cy="97" r="2.5" fill="#ffffff"/>
+  <circle cx="159" cy="97" r="2.5" fill="#ffffff"/>
+  <ellipse cx="128" cy="190" rx="13" ry="9" fill="#111111"/>
+</svg>
