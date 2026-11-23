@@ -82,12 +82,16 @@ def build_command(cfg, endpoint, model, workspace, environ=None):
     if cfg.local_tools:
         argv.append("--local-tools")
     env = environ
+    keep = [p for p in (env.get("PYTHONPATH") or "").split(os.pathsep) if p and os.path.isabs(p)]
+    if keep:
+        env["PYTHONPATH"] = os.pathsep.join(keep)      # relative entries would reach the current folder
+    else:
+        env.pop("PYTHONPATH", None)
     if cfg.rex_dir:
         rex = Path(cfg.rex_dir).expanduser()
         if not rex.is_absolute() or not rex.is_dir():
             raise RexError("rex_dir must be an existing absolute folder: %s" % cfg.rex_dir)
-        old = env.get("PYTHONPATH")
-        env["PYTHONPATH"] = str(rex) + (os.pathsep + old if old else "")
+        env["PYTHONPATH"] = os.pathsep.join([str(rex)] + keep)
     env["RUNTIME_LITELLM__BASE_URL"] = endpoint
     env.setdefault("RUNTIME_LITELLM__API_KEY", "dummy")
     env["PYTHONUTF8"] = "1"
@@ -96,12 +100,75 @@ def build_command(cfg, endpoint, model, workspace, environ=None):
     return argv, env, str(ws.resolve())
 
 
+_JOB = None
+_JOB_LOCK = threading.Lock()
+
+
+def new_job():
+    """A Windows job object that kills every process in it when its handle is closed (also when Lassie dies).
+    Returns the handle, or None."""
+    import ctypes
+    from ctypes import wintypes
+
+    class Basic(ctypes.Structure):
+        _fields_ = [("PerProcessUserTimeLimit", ctypes.c_int64), ("PerJobUserTimeLimit", ctypes.c_int64),
+                    ("LimitFlags", wintypes.DWORD), ("MinimumWorkingSetSize", ctypes.c_size_t),
+                    ("MaximumWorkingSetSize", ctypes.c_size_t), ("ActiveProcessLimit", wintypes.DWORD),
+                    ("Affinity", ctypes.c_size_t), ("PriorityClass", wintypes.DWORD),
+                    ("SchedulingClass", wintypes.DWORD)]
+
+    class IoCounters(ctypes.Structure):
+        _fields_ = [(n, ctypes.c_uint64) for n in ("r", "w", "o", "rb", "wb", "ob")]
+
+    class Extended(ctypes.Structure):
+        _fields_ = [("Basic", Basic), ("Io", IoCounters), ("ProcessMemoryLimit", ctypes.c_size_t),
+                    ("JobMemoryLimit", ctypes.c_size_t), ("PeakProcessMemoryUsed", ctypes.c_size_t),
+                    ("PeakJobMemoryUsed", ctypes.c_size_t)]
+
+    k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    k32.CreateJobObjectW.restype = wintypes.HANDLE
+    k32.CreateJobObjectW.argtypes = [ctypes.c_void_p, wintypes.LPCWSTR]
+    k32.SetInformationJobObject.argtypes = [wintypes.HANDLE, ctypes.c_int, ctypes.c_void_p, wintypes.DWORD]
+    job = k32.CreateJobObjectW(None, None)
+    if not job:
+        return None
+    info = Extended()
+    info.Basic.LimitFlags = 0x2000          # JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+    if not k32.SetInformationJobObject(job, 9, ctypes.byref(info), ctypes.sizeof(info)):
+        k32.CloseHandle(job)
+        return None
+    return job
+
+
+def assign_job(proc, job=None):
+    """Put a started process into the job (the shared one by default). True on success; failure is not fatal."""
+    global _JOB
+    if os.name != "nt":
+        return False
+    try:
+        import ctypes
+        from ctypes import wintypes
+        with _JOB_LOCK:
+            if job is None:
+                if _JOB is None:
+                    _JOB = new_job()
+                job = _JOB
+        if not job:
+            return False
+        k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        k32.AssignProcessToJobObject.argtypes = [wintypes.HANDLE, wintypes.HANDLE]
+        return bool(k32.AssignProcessToJobObject(job, int(proc._handle)))
+    except (OSError, AttributeError, TypeError, ValueError):
+        return False
+
+
 def _kill_tree(proc):
-    """Kill the process and everything it started."""
-    if proc.poll() is not None:
-        return
+    """Kill the process and everything it started. On POSIX the group is killed even when the leader is already
+    gone: its children may still run."""
     try:
         if os.name == "nt":
+            if proc.poll() is not None:
+                return
             taskkill = os.path.join(findexe.system_root(), "System32", "taskkill.exe")
             subprocess.run([taskkill, "/T", "/F", "/PID", str(proc.pid)], capture_output=True, timeout=10,
                            check=False)
@@ -132,6 +199,7 @@ class RexProcess:
                                          stderr=subprocess.PIPE, **kw)
         except OSError as exc:
             raise RexError("rex could not be started: %s" % exc.strerror) from None
+        assign_job(self.proc)         # Windows: the tree dies with Lassie
         self._out = threading.Thread(target=self._read_stdout, daemon=True)
         self._err = threading.Thread(target=self._read_stderr, daemon=True)
         self._out.start()

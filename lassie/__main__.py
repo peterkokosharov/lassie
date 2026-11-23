@@ -4,7 +4,9 @@
 """Command line: python -m lassie [--config FILE] [--port N] [--open]"""
 import argparse
 import logging
+import signal
 import sys
+import threading
 import webbrowser
 
 from lassie import __version__, config
@@ -37,6 +39,15 @@ def main(argv=None):
         print("merman-cli not found: mermaid blocks stay as code (set MERMAN_HOME or PATH)")
     if args.open:
         webbrowser.open(srv.url)
+
+    def bye(signum, frame):   # a closed terminal or a kill: stop serving, then the rex processes are stopped below
+        threading.Thread(target=srv.shutdown, daemon=True).start()
+    for name in ("SIGTERM", "SIGHUP", "SIGBREAK"):
+        if hasattr(signal, name):
+            try:
+                signal.signal(getattr(signal, name), bye)
+            except (ValueError, OSError):
+                pass
     try:
         srv.serve_forever(poll_interval=0.5)
     except KeyboardInterrupt:

@@ -360,3 +360,13 @@ def test_transfer_encoding_and_oversize_body_refused(srv):
                        "Content-Length: %d\r\n\r\n" % (TOKEN, server_mod.MAX_BODY + 1)) == 413
     assert raw_request(srv, "POST /api/start HTTP/1.1\r\n" + host + "X-Lassie-Token: %s\r\n"
                        "Content-Length: -5\r\n\r\n" % TOKEN) == 413
+
+
+def test_close_all_stops_sessions_in_parallel(srv, monkeypatch):
+    monkeypatch.setattr(server_mod.Session, "close", lambda self: time.sleep(0.6))
+    for _ in range(5):
+        srv.new_session()
+    t0 = time.monotonic()
+    srv.close_all()
+    assert time.monotonic() - t0 < 2.0
+    assert not srv.sessions

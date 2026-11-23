@@ -272,8 +272,11 @@ class LassieServer(ThreadingHTTPServer):
         self.stopping = True
         with self.lock:
             sids = list(self.sessions)
-        for sid in sids:
-            self.drop(sid)
+        ts = [threading.Thread(target=self.drop, args=(sid,)) for sid in sids]   # each stop may wait a few seconds
+        for t in ts:
+            t.start()
+        for t in ts:
+            t.join()
 
 
 class Handler(BaseHTTPRequestHandler):
