@@ -142,6 +142,15 @@ relay with a fake rex (`tests/fake_rex/`, started through the real command line)
 merman lookup and rendering with a fake merman, the standard-library-only rule, and the language bundles.
 The page itself (JavaScript) has no automated tests in this repository.
 
+## AI authorship
+
+Code here is largely written by AI models under the author's direction.
+
+- Each source file's `AI models:` header line lists the models that wrote or edited it.
+- Each AI-written commit carries a trailer `AI-Models: <ids>`.
+- Unknown history is marked as such (`AI models: unknown (before 2026-11-24)`).
+- `python -I tools/check_ai_header.py` fails if a file with an `Author:` header has no `AI models:` line.
+
 ## License
 
 MIT, see `LICENSE`. The Lassie icon is the author's own work, also MIT.
