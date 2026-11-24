@@ -1,0 +1,19 @@
+date: 2026-11-24 09:22:55 UTC
+commit: 3da8f83ec3fe15c0e1e7965ead67cb11754740d3
+os: Windows-11-10.0.26200-SP0
+python: 3.14.7
+
+suite: python tests (pytest)
+  command: python -m pytest -q tests
+  passed: 85  failed: 0  skipped: 2
+  result: PASS
+suite: AI header check
+  command: python -I tools/check_ai_header.py
+  passed: 1  failed: 0  skipped: 0
+  result: PASS
+suite: C/C++ tests
+  not run here: Lassie has no compiled code (Python, HTML, CSS and JavaScript only)
+suite: JavaScript page tests
+  not run here: the page has no automated tests; see TESTING.md for the manual plan
+
+overall: PASS
