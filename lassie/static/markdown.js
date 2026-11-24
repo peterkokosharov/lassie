@@ -1,5 +1,6 @@
 // lassie - the web front-end for rex
 // Copyright (c) 2026 Peter Kokosharov <peter.kokosharov@gmail.com>
+// AI models: claude-sonnet-5-5
 // SPDX-License-Identifier: MIT
 // Markdown -> DOM nodes (taken from kircho, images added). Every piece of text goes in through textContent;
 // nothing is ever parsed as markup. Headings, lists, quotes, code blocks, tables, links, images.

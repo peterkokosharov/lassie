@@ -1,5 +1,6 @@
 # lassie - the web front-end for rex
 # Copyright (c) 2026 Peter Kokosharov <peter.kokosharov@gmail.com>
+# AI models: claude-sonnet-5-5
 # SPDX-License-Identifier: MIT
 r"""Find an executable on PATH, never in the current directory (taken from kircho).
 

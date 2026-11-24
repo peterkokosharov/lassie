@@ -1,5 +1,6 @@
 // lassie - the web front-end for rex
 // Copyright (c) 2026 Peter Kokosharov <peter.kokosharov@gmail.com>
+// AI models: claude-sonnet-5-5
 // SPDX-License-Identifier: MIT
 // The page: fields, chat with streaming, the "+" tools pane, permission questions, ctx indicator, shortcuts.
 // Input goes to the server by POST; everything rex says comes back over one event stream (SSE).

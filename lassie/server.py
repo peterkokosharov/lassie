@@ -1,5 +1,6 @@
 # lassie - the web front-end for rex
 # Copyright (c) 2026 Peter Kokosharov <peter.kokosharov@gmail.com>
+# AI models: claude-sonnet-5-5
 # SPDX-License-Identifier: MIT
 """HTTP server: page, static files, API and the event stream (SSE). Binds 127.0.0.1 only.
 

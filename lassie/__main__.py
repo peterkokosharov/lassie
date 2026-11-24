@@ -1,5 +1,6 @@
 # lassie - the web front-end for rex
 # Copyright (c) 2026 Peter Kokosharov <peter.kokosharov@gmail.com>
+# AI models: claude-sonnet-5-5
 # SPDX-License-Identifier: MIT
 """Command line: python -m lassie [--config FILE] [--port N] [--open]"""
 import argparse

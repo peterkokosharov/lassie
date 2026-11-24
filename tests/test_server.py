@@ -1,5 +1,6 @@
 # lassie - the web front-end for rex
 # Copyright (c) 2026 Peter Kokosharov <peter.kokosharov@gmail.com>
+# AI models: claude-sonnet-5-5
 # SPDX-License-Identifier: MIT
 """Safety gates (Host, Origin, token, cookie) and the JSONL relay with a fake rex, over real HTTP."""
 import http.client

@@ -1,5 +1,6 @@
 # lassie - the web front-end for rex
 # Copyright (c) 2026 Peter Kokosharov <peter.kokosharov@gmail.com>
+# AI models: claude-sonnet-5-5
 # SPDX-License-Identifier: MIT
 """A fake rex for tests: `python -P -m runtime --model M --jsonl [--local-tools]` speaking the JSONL protocol.
 

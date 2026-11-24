@@ -1,5 +1,6 @@
 # lassie - the web front-end for rex
 # Copyright (c) 2026 Peter Kokosharov <peter.kokosharov@gmail.com>
+# AI models: claude-sonnet-5-5
 # SPDX-License-Identifier: MIT
 """A fake merman-cli: `render IN -o OUT -f svg -q`. A source containing "fail" exits 1 with a message."""
 import sys
