@@ -24,5 +24,11 @@ jobs:
           python-version: ${{ matrix.python }}
       - name: Install test tools
         run: python -m pip install pytest==9.2.0
-      - name: Tests
-        run: python -m pytest -q
+      - name: All suites (pytest, header check) and test-results.txt
+        run: python tools/run_tests.py
+      - name: Upload test-results.txt
+        if: always()
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: test-results-${{ matrix.os }}-py${{ matrix.python }}
+          path: test-results.txt

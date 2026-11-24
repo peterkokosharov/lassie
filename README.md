@@ -131,6 +131,8 @@ To be added (`docs/screenshots/`):
 
 ## Tests
 
+Full instructions for every OS, all suites and what red means: [TESTING.md](TESTING.md).
+
 ```
 python -m venv .venv
 .venv/bin/python -m pip install pytest        (Windows: .venv\Scripts\python -m pip install pytest)
